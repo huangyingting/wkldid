@@ -43,10 +43,17 @@ module "azurerm_backend_role_assignment" {
   scope_id     = module.terraform_azurerm_backend.id
 }
 
-module "subscription_role_assignment" {
+module "contributor_role_assignment" {
   source       = "../modules/role_assignment"
   principal_id = module.user_assigned_identity.principal_id
   role_name    = "Contributor"
+  scope_id     = data.azurerm_subscription.subscription.id
+}
+
+module "role_based_access_control_administrator_role_assignment" {
+  source       = "../modules/role_assignment"
+  principal_id = module.user_assigned_identity.principal_id
+  role_name    = "Role Based Access Control Administrator"
   scope_id     = data.azurerm_subscription.subscription.id
 }
 

@@ -22,6 +22,7 @@ resource "azurerm_key_vault_secret" "secret" {
   name         = "secret"
   value        = "Azure workload identity secret"
   key_vault_id = azurerm_key_vault.kv.id
+  depends_on   = [module.secret_officer_role_assignment]
 }
 
 module "secret_user_role_assignment" {
