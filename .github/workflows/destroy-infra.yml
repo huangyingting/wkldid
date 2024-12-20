@@ -66,7 +66,7 @@ jobs:
         id: destroy
         # env:
         #   TF_LOG: DEBUG
-        run: terraform destroy -no-color -var="prefix=${{ github.event.inputs.prefix != '' && github.event.inputs.prefix || 'wl' }}" -var="location=${{ github.event.inputs.location != '' && github.event.inputs.location || 'southeastasia' }}" -var="environment=${{ github.event.inputs.environment != '' && github.event.inputs.environment || 'dev' }}" -var="outbound_ip=${{ steps.get_ip.outputs.outbound_ip }}" -auto-approve -input=false
+        run: terraform destroy -no-color -var="resource_name=${{secrets.RESOURCE_NAME}}" -var="location=${{secrets.LOCATION}}" -var="environment=${{ github.event.inputs.environment != '' && github.event.inputs.environment || 'dev' }}" -var="outbound_ip=${{ steps.get_ip.outputs.outbound_ip }}" -auto-approve -input=false
         continue-on-error: true
 
       - name: Create Issue

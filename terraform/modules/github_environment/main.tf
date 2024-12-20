@@ -60,11 +60,11 @@ resource "github_actions_environment_secret" "tfstate_container_name" {
   plaintext_value = var.tfstate_container_name
 }
 
-resource "github_actions_environment_secret" "resource_prefix" {
+resource "github_actions_environment_secret" "resource_name" {
   repository      = data.github_repository.repository.name
   environment     = github_repository_environment.environment.environment
-  secret_name     = "RESOURCE_PREFIX"
-  plaintext_value = var.resource_prefix
+  secret_name     = "RESOURCE_NAME"
+  plaintext_value = var.resource_name
 }
 
 resource "github_actions_environment_secret" "location" {

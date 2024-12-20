@@ -6,6 +6,21 @@ variable "location" {
   description = "The location where the resources will be created."
 }
 
+variable "environments" {
+  type    = list(string)
+  default = ["dev", "staging", "prod"]
+}
+
+variable "resource_prefix" {
+  type    = string
+  default = "wkldid"
+}
+
+variable "random_suffix_enabled" {
+  type    = bool
+  default = false
+}
+
 variable "tags" {
   description = "A mapping of tags to assign to the resources."
   type        = map(string)
@@ -24,16 +39,6 @@ variable "github_organization" {
 variable "github_repository" {
   type        = string
   description = "The name of the GitHub repository to target"
-}
-
-variable "environments" {
-  type    = list(string)
-  default = ["dev", "staging", "prod"]
-}
-
-variable "resource_prefix" {
-  type    = string
-  default = "wkldid"
 }
 
 variable "storage_account_name" {

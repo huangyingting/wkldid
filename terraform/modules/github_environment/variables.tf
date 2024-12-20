@@ -43,9 +43,9 @@ variable "tfstate_container_name" {
   description = "Terraform state container name"
 }
 
-variable "resource_prefix" {
+variable "resource_name" {
   type        = string
-  description = "Resource prefix"
+  description = "Resource name"
 }
 
 variable "location" {

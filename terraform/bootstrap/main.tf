@@ -6,6 +6,11 @@ locals {
 data "azurerm_subscription" "subscription" {
 }
 
+resource "random_integer" "random_suffix" {
+  min = 1000
+  max = 9999
+}
+
 module "resource_group" {
   source   = "../modules/resource_group"
   name     = var.rg_name
@@ -78,7 +83,7 @@ module "github_environment" {
   tfstate_resource_group_name  = module.resource_group.name
   tfstate_storage_account_name = module.terraform_azurerm_backend.storage_account_name
   tfstate_container_name       = "${var.container_name_prefix}-${each.key}"
-  resource_prefix              = var.resource_prefix
+  resource_name                = "${var.resource_prefix}${each.key}${var.random_suffix_enabled ? random_integer.random_suffix.result : ""}"
   location                     = var.location
 }
 

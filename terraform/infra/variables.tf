@@ -1,6 +1,5 @@
-variable "prefix" {
-  type    = string
-  default = "wl"
+variable "resource_name" {
+  type = string
 }
 
 variable "location" {

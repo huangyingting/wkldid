@@ -16,14 +16,6 @@ on:
           - dev
           - staging
           - prod
-      location:
-        description: 'Location to deploy'
-        required: true
-        default: 'southeastasia'
-      prefix:
-        description: 'Resource prefix'
-        required: true
-        default: 'wkldid'
 
 jobs:
   terraform:
@@ -84,13 +76,13 @@ jobs:
 
       - name: Terraform Plan
         id: plan        
-        run: terraform plan -no-color -var="prefix=${{ github.event.inputs.prefix != '' && github.event.inputs.prefix || 'wl' }}" -var="location=${{ github.event.inputs.location != '' && github.event.inputs.location || 'southeastasia' }}" -var="environment=${{ github.event.inputs.environment != '' && github.event.inputs.environment || 'dev' }}" -var="outbound_ip=${{ steps.get_ip.outputs.outbound_ip }}" -input=false
+        run: terraform plan -no-color -var="resource_name=${{secrets.RESOURCE_NAME}}" -var="location=${{secrets.LOCATION}}" -var="environment=${{ github.event.inputs.environment != '' && github.event.inputs.environment || 'dev' }}" -var="outbound_ip=${{ steps.get_ip.outputs.outbound_ip }}" -input=false
 
       - name: Terraform Apply
         id: apply
         # env:
         #   TF_LOG: DEBUG
-        run: terraform apply -no-color -var="prefix=${{ github.event.inputs.prefix != '' && github.event.inputs.prefix || 'wl' }}" -var="location=${{ github.event.inputs.location != '' && github.event.inputs.location || 'southeastasia' }}" -var="environment=${{ github.event.inputs.environment != '' && github.event.inputs.environment || 'dev' }}" -var="outbound_ip=${{ steps.get_ip.outputs.outbound_ip }}" -auto-approve -input=false
+        run: terraform apply -no-color -var="resource_name=${{secrets.RESOURCE_NAME}}" -var="location=${{secrets.LOCATION}}" -var="environment=${{ github.event.inputs.environment != '' && github.event.inputs.environment || 'dev' }}" -var="outbound_ip=${{ steps.get_ip.outputs.outbound_ip }}" -auto-approve -input=false
         continue-on-error: true
 
       - name: Update Pull Request

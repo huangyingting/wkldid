@@ -4,22 +4,21 @@ locals {
   }
   node_count       = 1
   vm_size          = "Standard_B2s"
-  aks_uai_name     = "${var.prefix}-${var.environment}"
-  namespace        = var.prefix
-  serviceaccount   = "${var.prefix}sa"
+  namespace        = "wkldid"
   default_audience = "api://AzureADTokenExchange"
+  serviceaccount   = "sa${var.resource_name}"
 }
 
 module "resource_group" {
   source   = "../modules/resource_group"
-  name     = "${var.prefix}-${var.environment}"
+  name     = var.resource_name
   location = var.location
   tags     = local.tags
 }
 
 module "aks" {
   source     = "../modules/aks"
-  aks_name   = "aks${var.prefix}${var.environment}"
+  aks_name   = "aks${var.resource_name}"
   location   = var.location
   rg_name    = module.resource_group.name
   node_count = local.node_count
@@ -29,7 +28,7 @@ module "aks" {
 
 module "user_assigned_identity" {
   source   = "../modules/user_assigned_identity"
-  name     = local.aks_uai_name
+  name     = var.resource_name
   location = var.location
   rg_name  = module.resource_group.name
   tags     = local.tags
@@ -47,8 +46,8 @@ module "aks_federated_credential" {
 
 module "azure_sql" {
   source                  = "../modules/azure_sql"
-  azure_sql_server_name   = "sql${var.prefix}${var.environment}"
-  azure_sql_database_name = var.prefix
+  azure_sql_server_name   = "sql${var.resource_name}"
+  azure_sql_database_name = var.resource_name
   location                = var.location
   rg_name                 = module.resource_group.name
   outbound_ip             = var.outbound_ip
@@ -67,8 +66,8 @@ resource "null_resource" "run_sql_script" {
     command = <<EOT
       sqlcmd --authentication-method=ActiveDirectoryAzCli \
              -S ${module.azure_sql.server_fqdn} \
-             -d ${var.prefix} \
-             -Q "IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'${local.aks_uai_name}') BEGIN CREATE USER [${local.aks_uai_name}] FROM EXTERNAL PROVIDER WITH OBJECT_ID='${module.user_assigned_identity.principal_id}'; ALTER ROLE db_datareader ADD MEMBER [${local.aks_uai_name}]; END"
+             -d ${var.resource_name} \
+             -Q "IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = N'${var.resource_name}') BEGIN CREATE USER [${var.resource_name}] FROM EXTERNAL PROVIDER WITH OBJECT_ID='${module.user_assigned_identity.principal_id}'; ALTER ROLE db_datareader ADD MEMBER [${var.resource_name}]; END"
     EOT
   }
   triggers = {
