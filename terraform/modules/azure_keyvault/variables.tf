@@ -15,5 +15,5 @@ variable "kv_name" {
 
 variable "principal_id" {
   description = "The principal id of the user assigned managed identity"
-  type        = string  
+  type        = string
 }

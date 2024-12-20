@@ -55,10 +55,10 @@ module "azure_sql" {
 }
 
 module "azure_keyvault" {
-  source   = "../modules/azure_keyvault"
-  location = var.location
-  rg_name  = module.resource_group.name
-  kv_name = "kv${var.resource_name}"
+  source       = "../modules/azure_keyvault"
+  location     = var.location
+  rg_name      = module.resource_group.name
+  kv_name      = "kv${var.resource_name}"
   principal_id = module.user_assigned_identity.principal_id
 }
 
