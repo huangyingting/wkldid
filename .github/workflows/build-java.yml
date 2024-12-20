@@ -1,0 +1,49 @@
+name: Build and Push Java Docker Image
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'java/**'      
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'java/**'
+      
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 21
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '21'
+
+    - name: Grant execute permission for gradlew
+      run: chmod +x java/gradlew
+
+    - name: Build with Gradle
+      run: cd java && ./gradlew clean build
+
+    - name: Log in to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build Docker image
+      run: docker build -t ghcr.io/${{ github.repository }}/wkldid-java:latest java/
+
+    - name: Push Docker image
+      run: docker push ghcr.io/${{ github.repository }}/wkldid-java:latest

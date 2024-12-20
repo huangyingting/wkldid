@@ -1,0 +1,116 @@
+name: Destroy Infrastructure
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to destroy'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      location:
+        description: 'Location to destroy'
+        required: true
+        default: 'southeastasia'
+      prefix:
+        description: 'Resource prefix'
+        required: true
+        default: 'wkldid'
+    
+    
+jobs:
+  terraform:
+    defaults:
+      run:
+        working-directory: ./terraform/infra
+    name: Terraform
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    environment: ${{ github.event.inputs.environment != '' && github.event.inputs.environment || 'dev' }}
+    env:
+      ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+      ARM_USE_OIDC: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get Outbound IP
+        id: get_ip
+        run: |
+          ip=$(curl -s https://icanhazip.com)
+          echo "Outbound IP: $ip"
+          echo "::set-output name=outbound_ip::$ip"
+
+      - name: Install sqlcmd
+        run: |
+          latest_release_url=$(curl -s https://api.github.com/repos/microsoft/go-sqlcmd/releases/latest | grep '"browser_download_url":' | grep 'sqlcmd-linux-amd64.tar.bz2' | head -n 1 | cut -d '"' -f 4)
+          curl -L -o sqlcmd-linux-amd64.tar.bz2 $latest_release_url
+          sudo tar -xvjf sqlcmd-linux-amd64.tar.bz2 -C /usr/local/bin
+    
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        id: init
+        run: terraform init -backend-config="resource_group_name=${{secrets.TFSTATE_RESOURCE_GROUP_NAME}}" -backend-config="storage_account_name=${{secrets.TFSTATE_STORAGE_ACCOUNT_NAME}}" -backend-config="container_name=${{secrets.TFSTATE_CONTAINER_NAME}}"
+
+      - name: Terraform Destroy
+        id: destroy
+        # env:
+        #   TF_LOG: DEBUG
+        run: terraform destroy -no-color -var="prefix=${{ github.event.inputs.prefix != '' && github.event.inputs.prefix || 'wl' }}" -var="location=${{ github.event.inputs.location != '' && github.event.inputs.location || 'southeastasia' }}" -var="environment=${{ github.event.inputs.environment != '' && github.event.inputs.environment || 'dev' }}" -var="outbound_ip=${{ steps.get_ip.outputs.outbound_ip }}" -auto-approve -input=false
+        continue-on-error: true
+
+      - name: Create Issue
+        env:
+          DESTROY_STDOUT: ${{ steps.destroy.outputs.stdout }}
+          DESTROY_STDERR: ${{ steps.destroy.outputs.stderr }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const outcome = `${{ steps.destroy.outcome }}`
+            const body = `#### Terraform Destroy 🎨${outcome}
+
+            <details><summary>Show Destroy</summary>
+
+            \`\`\`terraform\n
+            ${process.env.DESTROY_STDOUT}
+            ${process.env.DESTROY_STDERR}
+            \`\`\`
+
+            </details>
+                        
+            *By: @${{ github.actor }}, Environment: \`${{ github.event.inputs.environment }}\`, Action: \`${{ github.event_name }}\`*`;
+
+            const now = new Date();
+            const year = now.getUTCFullYear();
+            const month = String(now.getUTCMonth() + 1).padStart(2, '0');
+            const day = String(now.getUTCDate()).padStart(2, '0');
+            const hours = String(now.getUTCHours()).padStart(2, '0');
+            const minutes = String(now.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(now.getUTCSeconds()).padStart(2, '0');
+            const timestamp = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+            const title = `Terraform destroy ${outcome === 'success' ? 'succeeded' : 'failed'} on ${timestamp} UTC`;
+
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body
+            })
+
+      - name: Check Destroy Status
+        if: steps.destroy.outcome == 'failure'
+        run: |
+          echo "Terraform Destroy step failed. Exiting with status 1."
+          exit 1
+    
