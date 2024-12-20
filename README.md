@@ -12,11 +12,11 @@ CLUSTER_NAME="akssea"
 
 ```bash
 # Azure workload identity
-SERVICE_ACCOUNT_NAMESPACE="wlid"
-SERVICE_ACCOUNT_NAME="wlidsa"
+SERVICE_ACCOUNT_NAMESPACE="wkldid"
+SERVICE_ACCOUNT_NAME="sawkldid"
 SUBSCRIPTION="$(az account show --query id --output tsv)"
-USER_ASSIGNED_IDENTITY_NAME="mid"
-FEDERATED_IDENTITY_CREDENTIAL_NAME="fedid"
+USER_ASSIGNED_IDENTITY_NAME="wkldid"
+FEDERATED_IDENTITY_CREDENTIAL_NAME="fedcred"
 ```
 
 ```bash
@@ -58,7 +58,7 @@ az identity federated-credential create --name ${FEDERATED_IDENTITY_CREDENTIAL_N
   "issuer": "https://southeastasia.oic.prod-aks.azure.com/7b800a60-9ab3-46bf-a60f-a96d0c7dc2a9/979860b4-7221-4030-89c0-0f0ab3d58fc4/",
   "name": "fedid",
   "resourceGroup": "AKSSEA",
-  "subject": "system:serviceaccount:wlid:wlidsa",
+  "subject": "system:serviceaccount:wkldid:sawkldid",
   "systemData": null,
   "type": "Microsoft.ManagedIdentity/userAssignedIdentities/federatedIdentityCredentials"
 }
@@ -67,7 +67,7 @@ az identity federated-credential create --name ${FEDERATED_IDENTITY_CREDENTIAL_N
 ```bash
 # Azure key vault
 KEYVAULT_RESOURCE_GROUP="KV"
-KEYVAULT_NAME="wlidkv"
+KEYVAULT_NAME="wkldidkv"
 KEYVAULT_SECRET_NAME="secret"
 
 # Create key vault and application to use key vault
@@ -99,17 +99,17 @@ cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
 metadata:
-  name: wlid-java
+  name: wkldid-java
   namespace: ${SERVICE_ACCOUNT_NAMESPACE}
   labels:
     azure.workload.identity/use: "true"
 spec:
   serviceAccountName: ${SERVICE_ACCOUNT_NAME}
   containers:
-    - image: ghcr.io/huangyingting/wlid/wlid-java:latest
-      name: wlid-java
+    - image: ghcr.io/huangyingting/wkldid/wkldid-java:latest
+      name: wkldid-java
       command: ["/bin/sh"]
-      args: ["-c", "java -cp app.jar org.icsu.wlid.KV"]
+      args: ["-c", "java -cp app.jar org.icsu.wkldid.KV"]
       env:
       - name: KEYVAULT_URL
         value: ${KEYVAULT_URL}
@@ -119,7 +119,7 @@ spec:
     kubernetes.io/os: linux
 EOF
 
-kubectl logs wlid -n "${SERVICE_ACCOUNT_NAMESPACE}"
+kubectl logs wkldid -n "${SERVICE_ACCOUNT_NAMESPACE}"
 ```
 
 ### Accessing Azure SQL Database with Azure Workload Identity
@@ -127,8 +127,8 @@ kubectl logs wlid -n "${SERVICE_ACCOUNT_NAMESPACE}"
 #### Create Azure SQL Database
 ```bash
 SQL_RESOURCE_GROUP="SQL"
-SQL_SERVER_NAME="wlid"
-SQL_DATABASE_NAME="wlid"
+SQL_SERVER_NAME="sqlwkldid"
+SQL_DATABASE_NAME="wkldid"
 SQL_USERNAME="azadmin"
 SQL_PASSWORD="P@ssw0rd"
 
@@ -163,7 +163,6 @@ az sql server firewall-rule create \
   -n AllowAzureServices \
   --start-ip-address 0.0.0.0 \
   --end-ip-address 0.0.0.0
-
 
 # Add myself as admin user
 az sql server ad-admin create \
@@ -213,15 +212,15 @@ cat <<EOF | kubectl apply -f -
 apiVersion: v1
 kind: Pod
 metadata:
-  name: wlid-java
+  name: wkldid-java
   namespace: ${SERVICE_ACCOUNT_NAMESPACE}
   labels:
     azure.workload.identity/use: "true"
 spec:
   serviceAccountName: ${SERVICE_ACCOUNT_NAME}
   containers:
-    - image: ghcr.io/huangyingting/wlid/wlid-java:latest
-      name: wlid-java
+    - image: ghcr.io/huangyingting/wkldid/wkldid-java:latest
+      name: wkldid-java
       env:
       - name: SQL_SERVER_FQDN
         value: ${SQL_SERVER_FQDN}

@@ -54,12 +54,13 @@ module "azure_sql" {
   tags                    = local.tags
 }
 
-# resource "null_resource" "run_sql_script" {
-#   provisioner "local-exec" {
-#     command = "sqlcmd -S ${module.azure_sql.fully_qualified_domain_name} -d ${var.prefix} ---authentication-method ActiveDirectoryDefault -Q \"CREATE USER [${local.aks_uai_name}] FROM EXTERNAL PROVIDER WITH OBJECT_ID='${module.aks_usi.user_assinged_identity_principal_id}';ALTER ROLE db_datareader ADD MEMBER [${local.aks_uai_name}];\""
-#   }
-#   depends_on = [module.azure_sql]
-# }
+module "azure_keyvault" {
+  source   = "../modules/azure_keyvault"
+  location = var.location
+  rg_name  = module.resource_group.name
+  kv_name = "kv${var.resource_name}"
+  principal_id = module.user_assigned_identity.principal_id
+}
 
 resource "null_resource" "run_sql_script" {
   provisioner "local-exec" {
