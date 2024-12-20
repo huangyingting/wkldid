@@ -15,7 +15,7 @@ dependencies {
 }
 
 application {
-    mainClass.set('org.icsu.wlid.SQL')
+    mainClass.set('org.icsu.wkldid.All')
 }
 
 test {
@@ -25,7 +25,7 @@ test {
 jar {
     manifest {
         attributes(
-            'Main-Class': 'org.icsu.wkldid.SQL'
+            'Main-Class': 'org.icsu.wkldid.All'
         )
     }
     from {
