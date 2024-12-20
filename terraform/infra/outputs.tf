@@ -1,5 +1,5 @@
 output "kubectl_commands" {
-  value = <<EOF
+  value = <<KUBECTLCMDS
 kubectl create ns ${local.namespace}
 
 cat <<EOT | kubectl apply -f -
@@ -87,7 +87,7 @@ spec:
 EOT
 
 kubectl logs wkldid -n ${local.namespace}
-EOF
+KUBECTLCMDS
 
   description = "Kubectl commands"
 }
