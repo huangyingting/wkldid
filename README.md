@@ -245,9 +245,171 @@ The bootstrap directory contains Terraform configuration files that set up the f
 
 Further resources will be deployed using the `deploy-infra.yml` workflow.
 
+### Debugging
+```bash
+kubectl expose pod mitmproxy --port 8080 -n ${SERVICE_ACCOUNT_NAMESPACE}
+kubectl run -n ${SERVICE_ACCOUNT_NAMESPACE} -it --rm --restart=Never --image mitmproxy/mitmproxy mitmproxy -- bash
+```
+
+```bash
+OVERRIDES=$(cat <<EOF
+    {
+        "metadata": {"labels":{"azure.workload.identity/use": "true"}},
+        "spec": {"serviceAccountName": "${SERVICE_ACCOUNT_NAME}"}
+    }
+EOF
+)
+kubectl run -n ${SERVICE_ACCOUNT_NAMESPACE} -it --rm --restart=Never \
+    --image=ubuntu:22.04 azure-cli \
+    --overrides "$OVERRIDES" \
+    -- bash -c \
+    '
+    apt update
+    apt install curl -y
+    curl -sL https://aka.ms/InstallAzureCLIDeb | bash
+    curl --proxy http://mitmproxy:8080 http://mitm.it/cert/pem -o /usr/local/share/ca-certificates/mitmproxy.crt
+    update-ca-certificates
+    export https_proxy=http://mitmproxy:8080
+    cp /etc/ssl/certs/ca-certificates.crt /opt/az/lib/python3.12/site-packages/certifi/cacert.pem
+    az login --federated-token "$(cat $AZURE_FEDERATED_TOKEN_FILE)" --service-principal -u $AZURE_CLIENT_ID -t $AZURE_TENANT_ID
+    exec bash
+    '
+```
+
+
+```text
+[04:31:58.359] HTTP(S) proxy listening at *:8080.
+[04:32:06.773][10.244.0.26:44104] client connect
+[04:32:06.785][10.244.0.26:44104] server connect raw.githubusercontent.com:443 (185.199.109.133:443)
+10.244.0.26:44104: HEAD https://raw.githubusercontent.com/
+                << 301 Moved Permanently 0b
+[04:32:06.831][10.244.0.26:44104] client disconnect
+[04:32:06.832][10.244.0.26:44104] server disconnect raw.githubusercontent.com:443 (185.199.109.133:443)
+[04:32:06.834][10.244.0.26:44108] client connect
+[04:32:06.840][10.244.0.26:44108] server connect raw.githubusercontent.com:443 (185.199.109.133:443)
+10.244.0.26:44108: GET https://raw.githubusercontent.com/Azure/azure-cli/main/src/azure-cli-core/setup…
+                << 200 OK 1.3k
+[04:32:06.868][10.244.0.26:44108] client disconnect
+[04:32:06.869][10.244.0.26:44108] server disconnect raw.githubusercontent.com:443 (185.199.109.133:443)
+[04:32:06.872][10.244.0.26:44118] client connect
+[04:32:06.878][10.244.0.26:44118] server connect raw.githubusercontent.com:443 (185.199.111.133:443)
+10.244.0.26:44118: GET https://raw.githubusercontent.com/Azure/azure-cli/main/src/azure-cli-telemetry/…
+                << 200 OK 677b
+[04:32:06.899][10.244.0.26:44118] client disconnect
+[04:32:06.901][10.244.0.26:44118] server disconnect raw.githubusercontent.com:443 (185.199.111.133:443)
+[04:32:09.126][10.244.0.26:44124] client connect
+[04:32:09.203][10.244.0.26:44124] server connect login.microsoftonline.com:443 (20.190.144.160:443)
+10.244.0.26:44124: GET https://login.microsoftonline.com/cda45820-586e-4720-95ae-98bf6b86d670/v2.0/.we…
+                << 200 OK 1.7k
+10.244.0.26:44124: POST https://login.microsoftonline.com/cda45820-586e-4720-95ae-98bf6b86d670/oauth2/v…
+                << 200 OK 1.7k
+[04:32:11.005][10.244.0.26:44132] client connect
+[04:32:11.051][10.244.0.26:44132] server connect management.azure.com:443 (4.150.240.10:443)
+10.244.0.26:44132: GET https://management.azure.com/subscriptions?api-version=2022-12-01
+                << 200 OK 444b
+[04:32:11.268][10.244.0.26:44132] client disconnect
+[04:32:11.270][10.244.0.26:44132] server disconnect management.azure.com:443 (4.150.240.10:443)
+[04:32:11.359][10.244.0.26:44124] client disconnect
+[04:32:11.361][10.244.0.26:44124] server disconnect login.microsoftonline.com:443 (20.190.144.160:443)
+[04:32:11.483][10.244.0.26:44140] client connect
+[04:32:11.603][10.244.0.26:44140] server connect dc.services.visualstudio.com:443 (20.213.196.212:443)
+10.244.0.26:44140: POST https://dc.services.visualstudio.com/v2/track
+                << 200 OK 62b
+[04:32:12.113][10.244.0.26:44140] server disconnect dc.services.visualstudio.com:443 (20.213.196.212:443)
+[04:32:12.114][10.244.0.26:44140] client disconnect
+
+```
+
+```bash
+AZURE_TENANT_ID=cda45820-586e-4720-95ae-98bf6b86d670
+AZURE_FEDERATED_TOKEN_FILE=/var/run/secrets/azure/tokens/azure-identity-token
+AZURE_AUTHORITY_HOST=https://login.microsoftonline.com/
+AZURE_CLIENT_ID=6eb42820-8a10-4c05-ac5b-1b083f333666
+```
+
+```bash
+https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d670/f6cfcb74-f63c-4fa3-9cd8-24ccd8958c68/.well-known/openid-configuration
+```
+
+```json
+{
+  "issuer": "https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d670/f6cfcb74-f63c-4fa3-9cd8-24ccd8958c68/",
+  "jwks_uri": "https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d670/f6cfcb74-f63c-4fa3-9cd8-24ccd8958c68/openid/v1/jwks",
+  "response_types_supported": [
+    "id_token"
+  ],
+  "subject_types_supported": [
+    "public"
+  ],
+  "id_token_signing_alg_values_supported": [
+    "RS256"
+  ]
+}
+```
+```bash
+https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d670/f6cfcb74-f63c-4fa3-9cd8-24ccd8958c68/openid/v1/
+```
+
+```json
+{
+  "keys": [
+    {
+      "use": "sig",
+      "kty": "RSA",
+      "kid": "7gwE9ShhS3dml7V8Csg26saXyN8u-GKAPTxO0ZPbnos",
+      "alg": "RS256",
+      "n": "2WEhKYvzA22zBWO9ZIPaxnijA_IWncgbQHSDRbDiNvhjP8tGrBJK4wZIrilaTMQ6mzslPmiURXqgrducTTjr3Hkpcf5dxIpDVWYnyToJjRQOsy0ShxOizk8866TnXaAzzXIcFHMEkvPDqshUhgcbVR2W0iv7iNaCe1Whf497aIAtbKhrktyEsDqEv2RM6F1LlzYD-BzrjcwCFrrIevIDK7LPgAotaN6QXjPYygax3RKx5cNOS0VJv0hKLUpAswnn-LOcjeHW96AQxEfbZ1csz0tycJHKQyyhGQfbKydMpWVzXMmWMrheNPx_ehQWOrBwTX4ZEG5D88yjKO6FQR2ngwDxAYlNW3nwRG5lrQtgAit1xyNK4O8PmN7AJ3dQZ7KgYh7I8nc0zXANogi5T_U_1j8x5Wn9NpHzo-zgEuhv7LSUDhsiI57OTpftvSRRp5RZp8cW31mo25W8q0tLwwwsiOYbY062zosgccZQXwKaw4qps5S3BQjSOLo5g33730vLG16v8F5NopG8VdhoVbq7yPfeltScXPSk30Z5TX78MxFRTmh7gc_-79EVPGwckyeX09m6kd2ah5QuZBDXPctU7rGKbXvHrvHeJ3D0WvpNAs_CvPM4ShbyPbtNP5HXg7JUk-HJO3VCSZaaIvwUdSqgpA4e2y57WSyV921W_eeGvj8",
+      "e": "AQAB"
+    },
+    {
+      "use": "sig",
+      "kty": "RSA",
+      "kid": "S6CkIBcFtsNYUg1sdVDyOoeoBt7rDA3V2c4nXJ8_ucQ",
+      "alg": "RS256",
+      "n": "yPfvqgeaEt9387XQd68RBI0AFZRAbca3FLLyXJrNEPFzLFJTGfwOizXv_7r0xdKnCyuiMHSvPH8b1zoppEbv_a769F2nJB4m0kmwpuSKSkaGHon2x9DEZxkm4_PxapyrP5vm-AUX3NuLQU6gYOLdmYLAfmWxjpkWAsRZXz9HJXbu3_Y5a26PeDcUy3COLfbruJs6Sl6nI-IK_PXtf8m_LxCN5PZXrr6Q_4_SxkfUTSu_k5hvULEYY5gztScnyMD-zFp2nO48dEq9vRS2kvgabWm_sT23Z7BnwQCQetK7pIJNyRgcW8iNNXAVdyX2Td1BLFpzGJqBo4XrOtg4dm6mNkTVueNgqog_nmd6CT7mfrcQ59l5p_dRxIuP4yVDGX0fgl15h6WHiGhyeWXwY3KwiO-mgcfEUfLAJxr4zsZ8oE8H5HLUCjAEvSGfdZFUH5RZwhc_WcQw2xMpfP51JMCB2eFHMZa0aNR0jgh20jl15j3qSiG0nl1E5ZauZ9TQKvrN-IFOfdsKjSeKV7oVA_LxqEbLc0y0zcOsIpowel78KbxLmG9i0dRKaOITOESzih87uPvVmlpxclwMEhi8ZGFQc0BGHZwOZSbHgWupyldhuJky1GA5n9zYbYa7NBFSrAUOiXP-cqm4CGFArNf1Nh40RlQ8CmCVAplrTNYghmtC5gs",
+      "e": "AQAB"
+    }
+  ]
+}
+```
+
+```json
+{
+  "aud": [
+    "api://AzureADTokenExchange"
+  ],
+  "exp": 1734755019,
+  "iat": 1734751419,
+  "iss": "https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d670/f6cfcb74-f63c-4fa3-9cd8-24ccd8958c68/",
+  "jti": "6e0d4d77-15ef-4b3e-aee1-2584ce138345",
+  "kubernetes.io": {
+    "namespace": "wkldid",
+    "node": {
+      "name": "aks-syspool-10485676-vmss000000",
+      "uid": "57a2ac64-7286-48f4-9d84-d389a0ea039a"
+    },
+    "pod": {
+      "name": "azure-cli",
+      "uid": "0241cb78-9a08-43d6-9f47-aaee6f152687"
+    },
+    "serviceaccount": {
+      "name": "sawkldiddev5861",
+      "uid": "fd317523-e86a-4601-af92-979938702fdd"
+    }
+  },
+  "nbf": 1734751419,
+  "sub": "system:serviceaccount:wkldid:sawkldiddev5861"
+}
+```
+
 ### Reference:
 [Accessing Azure SQL DB via Workload Identity and Managed Identity
 ](https://azureglobalblackbelts.com/2021/09/21/workload-identity-azuresql-example.html)
 
 [Connect using Microsoft Entra authentication
 ](https://learn.microsoft.com/en-us/sql/connect/jdbc/connecting-using-azure-active-directory-authentication)
+
+[Using Federated Identities in Azure AKS
+](https://stvdilln.medium.com/using-federated-identities-in-azure-aks-a440feb4a1ce)
+
+[Connect your Kubernetes application to your database without any credentials (and securely)](https://alexisplantin.fr/workload-identity-federation/)
