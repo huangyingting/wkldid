@@ -403,6 +403,8 @@ https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d67
 ```
 
 ### Reference:
+[Identity in the cloud](https://blog.identitydigest.com/)
+
 [Accessing Azure SQL DB via Workload Identity and Managed Identity
 ](https://azureglobalblackbelts.com/2021/09/21/workload-identity-azuresql-example.html)
 
@@ -413,3 +415,6 @@ https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d67
 ](https://stvdilln.medium.com/using-federated-identities-in-azure-aks-a440feb4a1ce)
 
 [Connect your Kubernetes application to your database without any credentials (and securely)](https://alexisplantin.fr/workload-identity-federation/)
+
+[Third case: Access token request with a federated credential
+](https://learn.microsoft.com/en-us/entra/identity-platform/v2-oauth2-client-creds-grant-flow#third-case-access-token-request-with-a-federated-credential)
