@@ -245,6 +245,19 @@ The bootstrap directory contains Terraform configuration files that set up the f
 
 Further resources will be deployed using the `deploy-infra.yml` workflow.
 
+### Keycloak
+```bash
+export CLIENTNAME=
+export SECRET=
+
+KEYCLOAK_RESPONSE=$(curl --request POST "https://fqdn/realms/master/protocol/openid-connect/token" \
+  --header "Content-Type: application/x-www-form-urlencoded" \
+  --data-urlencode "client_id=$CLIENTNAME" \
+  --data-urlencode "client_secret=$SECRET" \
+  --data-urlencode "scope=openid" \
+  --data-urlencode "grant_type=client_credentials")
+```
+
 ### Debugging
 ```bash
 kubectl expose pod mitmproxy --port 8080 -n ${SERVICE_ACCOUNT_NAMESPACE}
@@ -401,6 +414,7 @@ https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d67
   "sub": "system:serviceaccount:wkldid:sawkldiddev5861"
 }
 ```
+
 
 ### Reference:
 [Identity in the cloud](https://blog.identitydigest.com/)
