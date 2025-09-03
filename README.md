@@ -1,10 +1,103 @@
-## Using Azure Workload Identity with Azure Services
+# Azure Workload Identity E2E Demo
+## Overview
+
+This repository demonstrates Azure Workload Identity end-to-end with:
+
+- GitHub Actions deploying Terraform to Azure using OIDC (no client secret), plus Java image build
+- AKS pods accessing Azure Key Vault and Azure SQL using a user-assigned managed identity (no secrets in pods)
+
+Use the guided sections below to understand the concepts, how this repo is organized, and how the included workflows operate. All existing step-by-step commands are retained further down.
+
+## What is Azure Workload Identity?
+
+Workload identity lets applications (workloads) authenticate to clouds without storing credentials. In Azure, this is enabled by federated identity credentials that trust an external identity provider’s OIDC tokens (for example, AKS or GitHub Actions) to obtain Microsoft Entra ID tokens for a managed identity or service principal.
+
+Key ideas:
+
+- OpenID Connect (OIDC) federation: Azure validates a signed token from an issuer (e.g., AKS’s OIDC endpoint or GitHub’s OIDC provider) and, if claims match a configured subject, issues an access token for the target identity.
+- Managed identity: A first-class identity in Microsoft Entra ID (user-assigned in this repo) used by workloads to call Azure services (Key Vault, SQL, etc.).
+- No secrets: Pods and CI jobs don’t need to store client secrets; they exchange short‑lived tokens securely.
+
+### How AKS Workload Identity works (in this repo)
+
+1. AKS cluster is created with OIDC issuer and workload identity enabled.
+2. A user-assigned managed identity (UAMI) is created in Azure.
+3. A federated identity credential is added to that UAMI, trusting the AKS OIDC issuer and a specific Kubernetes ServiceAccount subject (system:serviceaccount:<namespace>:<name>).
+4. A ServiceAccount is annotated with the UAMI client ID and the pod is labeled to opt-in to workload identity.
+5. The Azure SDK in the container uses DefaultAzureCredential to read the projected OIDC token and exchanges it for an Azure AD token representing the UAMI.
+6. With appropriate RBAC/roles, the pod calls Key Vault, SQL, etc., without any stored secrets.
+
+In the Java sample:
+
+- `KV` reads `KEYVAULT_URL` and `KEYVAULT_SECRET_NAME`, authenticates via DefaultAzureCredential, and retrieves a secret from Key Vault.
+- `SQL` uses Microsoft Entra (ActiveDirectoryDefault) authentication to connect to Azure SQL. Database permissions are granted to the UAMI mapped as an external user in SQL.
+
+### How GitHub Actions workload identity works (in this repo)
+
+1. The workflow requests an OIDC token by setting `permissions: id-token: write`.
+2. `azure/login` exchanges the OIDC token for a Microsoft Entra token using a federated credential configured for the GitHub repository/environment.
+3. Terraform authenticates via OIDC (`ARM_USE_OIDC=true`) to provision Azure resources without any client secret.
+
+## Repository structure
+
+- `java/` – Simple Java apps demonstrating access via workload identity.
+  - Uses Gradle. Dockerfile builds `wkldid-java` image.
+  - Entrypoints:
+    - `org.icsu.wkldid.KV` – reads a secret from Key Vault
+    - `org.icsu.wkldid.SQL` – queries sample data from Azure SQL with AAD auth
+    - `org.icsu.wkldid.All` – runs both on a loop
+  - Expected env vars when running in AKS:
+    - `KEYVAULT_URL`, `KEYVAULT_SECRET_NAME`
+    - `SQL_SERVER_FQDN`, `SQL_DATABASE_NAME`
+
+- `terraform/` – Infrastructure as code.
+  - `bootstrap/` – One-time state and identity setup
+    - Resource group for shared infra
+    - Storage account + container for Terraform state
+    - Managed identity + (via modules) federated credential for GitHub OIDC
+  - `infra/` – Main environment deployment driven by CI
+  - `modules/`:
+    - `aks/` – AKS with OIDC issuer and workload identity enabled
+    - `azure_keyvault/` – Key Vault instance
+    - `azure_sql/` – Azure SQL Server/DB configuration
+    - `user_assigned_identity/` – UAMI used by workloads
+    - `federated_credential/` – Federated identity credential bindings
+    - `role_assignment/`, `entra_id_role_assignment/` – RBAC assignments
+    - `resource_group/` – Resource group creation
+    - `github_environment/` – GitHub environment wiring for OIDC
+    - `terraform_azurerm_backend/` – Remote backend wiring
+
+## CI/CD workflows (.github/workflows)
+
+This repo includes four GitHub Actions workflows. Secrets expected (set at repo/org level): `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `TFSTATE_RESOURCE_GROUP_NAME`, `TFSTATE_STORAGE_ACCOUNT_NAME`, `TFSTATE_CONTAINER_NAME`, `RESOURCE_NAME`, `LOCATION`.
+
+1) Build and Push Java Docker Image – `build-java.yml`
+
+- Triggers: on push/pull_request changing files under `java/**` on `main`.
+- Steps: checkout, setup Java 21, Gradle build, Docker login to GHCR, build and push `ghcr.io/<owner>/<repo>/wkldid-java:latest`.
+- Permissions: `packages: write` to push the image.
+
+2) Deploy Infrastructure – `deploy-infra.yml`
+
+- Triggers: on pull requests touching `terraform/**`, and manual `workflow_dispatch` with `environment` input (`dev|staging|prod`).
+- OIDC: `permissions: id-token: write` and `ARM_USE_OIDC=true`; uses `azure/login@v2` to exchange the GitHub OIDC token.
+- Steps: fmt, init (remote backend from secrets), validate, plan/apply with variables (`resource_name`, `location`, `environment`, `outbound_ip`).
+- Reporting: comments on PR and opens an issue summarizing the apply outcome and logs.
+
+3) Destroy Infrastructure – `destroy-infra.yml`
+
+- Trigger: manual `workflow_dispatch` with `environment` input.
+- OIDC: same as deploy; runs `terraform destroy` with the same variables; opens an issue with logs; fails the job if destroy fails.
+
+---
+
+## Manual Deployment
 
 ### Integrating AKS with Azure Workload Identity
 ```bash
 # Azure CLI
 az login
-# Azure kubernetes service
+# Azure Kubernetes Service (AKS)
 RESOURCE_GROUP="AKSSEA"
 LOCATION="southeastasia"
 CLUSTER_NAME="akssea"
@@ -20,7 +113,7 @@ FEDERATED_IDENTITY_CREDENTIAL_NAME="fedcred"
 ```
 
 ```bash
-# Create resource group and aks
+# Create resource group and AKS
 az group create --name "${RESOURCE_GROUP}" --location "${LOCATION}"
 az aks create --resource-group "${RESOURCE_GROUP}" --name "${CLUSTER_NAME}" --enable-oidc-issuer --enable-workload-identity --generate-ssh-keys --location "${LOCATION}" --dns-name-prefix "${CLUSTER_NAME}" --nodepool-name syspool --node-count 1 --node-vm-size Standard_B2s
 
@@ -119,7 +212,7 @@ spec:
     kubernetes.io/os: linux
 EOF
 
-kubectl logs wkldid -n "${SERVICE_ACCOUNT_NAMESPACE}"
+kubectl logs wkldid-java -n "${SERVICE_ACCOUNT_NAMESPACE}"
 ```
 
 ### Accessing Azure SQL Database with Azure Workload Identity
@@ -164,14 +257,14 @@ az sql server firewall-rule create \
   --start-ip-address 0.0.0.0 \
   --end-ip-address 0.0.0.0
 
-# Add myself as admin user
+# Add signed-in user as Microsoft Entra admin
 az sql server ad-admin create \
 --resource-group $SQL_RESOURCE_GROUP \
 --server-name $SQL_SERVER_NAME \
 --display-name $SIGNED_IN_USER_DSP_NAME \
 --object-id $SIGNED_IN_USER_OBJ_ID
 
-# Enable Azure AD only authentication
+# Enable Microsoft Entra-only authentication
 az sql server ad-only-auth enable \
 --resource-group $SQL_RESOURCE_GROUP \
 --name $SQL_SERVER_NAME
@@ -190,11 +283,7 @@ az sql db create --resource-group $SQL_RESOURCE_GROUP --server $SQL_SERVER_NAME 
 
 #### Assign db reader role to workload identity in Azure SQL Database
 ```bash
-# Get the server FQDN
-SQL_SERVER_FQDN=$(az sql server show -g $SQL_RESOURCE_GROUP -n $SQL_SERVER_NAME -o tsv --query fullyQualifiedDomainName)
-
-# Generate the user creation command
-# Copy the output of the following to run against your SQL Server after logged in
+# Generate T-SQL to create external user and grant db_datareader
 echo "CREATE USER [${USER_ASSIGNED_IDENTITY_NAME}] FROM EXTERNAL PROVIDER WITH OBJECT_ID='${USER_ASSIGNED_OBJ_ID}'" > create_user.sql
 echo "GO" >> create_user.sql
 echo "ALTER ROLE db_datareader ADD MEMBER [${USER_ASSIGNED_IDENTITY_NAME}]" >> create_user.sql
@@ -230,7 +319,8 @@ spec:
     kubernetes.io/os: linux
 EOF
 ```
-### Terraform deployment
+
+## Terraform Deployment
 Terraform deployment is available in [terraform](terraform) folder.
 Steps to deploy:
 ```bash
@@ -245,7 +335,7 @@ The bootstrap directory contains Terraform configuration files that set up the f
 
 Further resources will be deployed using the `deploy-infra.yml` workflow.
 
-### Keycloak
+## Keycloak
 ```bash
 export CLIENTNAME=
 export SECRET=
@@ -258,7 +348,7 @@ KEYCLOAK_RESPONSE=$(curl --request POST "https://fqdn/realms/master/protocol/ope
   --data-urlencode "grant_type=client_credentials")
 ```
 
-### Debugging
+## Debugging
 ```bash
 kubectl expose pod mitmproxy --port 8080 -n ${SERVICE_ACCOUNT_NAMESPACE}
 kubectl run -n ${SERVICE_ACCOUNT_NAMESPACE} -it --rm --restart=Never --image mitmproxy/mitmproxy mitmproxy -- bash
@@ -416,7 +506,7 @@ https://southeastasia.oic.prod-aks.azure.com/cda45820-586e-4720-95ae-98bf6b86d67
 ```
 
 
-### Reference:
+## References:
 [Identity in the cloud](https://blog.identitydigest.com/)
 
 [Accessing Azure SQL DB via Workload Identity and Managed Identity
