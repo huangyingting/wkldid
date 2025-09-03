@@ -1,0 +1,4 @@
+theme: jekyll-theme-tactile
+title: Azure Workload Identity E2E Demo
+description: Azure Workload Identity End-to-End Demonstration
+markdown: GFM
